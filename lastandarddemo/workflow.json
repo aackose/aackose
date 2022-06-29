@@ -1,0 +1,176 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Describe_Image": {
+                "inputs": {
+                    "body": {
+                        "url": "@{triggerOutputs()['queries']['imgURL']}"
+                    },
+                    "host": {
+                        "connection": {
+                            "referenceName": "cognitiveservicescomputervision"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/vision/v2.0/describe",
+                    "queries": {
+                        "format": "Image URL",
+                        "language": "@parameters('computervision-language')"
+                    }
+                },
+                "runAfter": {
+                    "Initialize_Best_Caption": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection"
+            },
+            "Fetch_Confidence_Threshold": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ConfidenceThreshold",
+                            "type": "string",
+                            "value": "@{triggerOutputs()['queries']['confidenceThreshold']}"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            },
+            "For_each": {
+                "actions": {
+                    "Condition": {
+                        "actions": {
+                            "Set_variable": {
+                                "inputs": {
+                                    "name": "BestCaption",
+                                    "value": "@{items('For_each')['text']}"
+                                },
+                                "runAfter": {},
+                                "type": "SetVariable"
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "greater": [
+                                        "@decimal(items('For_each')['confidence'])",
+                                        "@decimal(triggerOutputs()['queries']['confidenceThreshold'])"
+                                    ]
+                                }
+                            ]
+                        },
+                        "runAfter": {},
+                        "type": "If"
+                    }
+                },
+                "foreach": "@body('Describe_Image')?['description']?['captions']",
+                "runAfter": {
+                    "Describe_Image": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "If_Best_Caption_found": {
+                "actions": {
+                    "Send_Success_Mail": {
+                        "inputs": {
+                            "body": {
+                                "caption": "Caption: @{variables('BestCaption')}<br>Confidence Threshold: @{variables('ConfidenceThreshold')} <br>",
+                                "subject": "@parameters('email-subject-success')"
+                            },
+                            "host": {
+                                "workflow": {
+                                    "id": "common-sendemail"
+                                }
+                            }
+                        },
+                        "runAfter": {},
+                        "type": "Workflow"
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "Send_Failure_Mail": {
+                            "inputs": {
+                                "body": {
+                                    "caption": "Low Confidence level below @{variables('ConfidenceThreshold')} observed!<br>",
+                                    "subject": "@parameters('email-subject-failure')"
+                                },
+                                "host": {
+                                    "workflow": {
+                                        "id": "common-sendemail"
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "type": "Workflow"
+                        }
+                    }
+                },
+                "expression": {
+                    "and": [
+                        {
+                            "not": {
+                                "equals": [
+                                    "@variables('BestCaption')",
+                                    ""
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "For_each": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "If"
+            },
+            "Initialize_Best_Caption": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "BestCaption",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Fetch_Confidence_Threshold": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Response": {
+                "inputs": {
+                    "body": "@body('Describe_Image')?['description']",
+                    "statusCode": 200
+                },
+                "kind": "http",
+                "runAfter": {
+                    "If_Best_Caption_found": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "triggers": {
+            "manual": {
+                "inputs": {
+                    "method": "GET"
+                },
+                "kind": "Http",
+                "type": "Request"
+            }
+        }
+    },
+    "kind": "Stateful"
+}

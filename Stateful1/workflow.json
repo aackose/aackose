@@ -1,0 +1,59 @@
+{
+  "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "actions": {
+          "Response": {
+              "inputs": {
+                  "statusCode": 200
+              },
+              "kind": "http",
+              "runAfter": {
+                  "Send_an_email_(V2)": [
+                      "Succeeded"
+                  ]
+              },
+              "type": "Response"
+          },
+          "Send_an_email_(V2)": {
+              "inputs": {
+                  "body": {
+                      "Body": "<p>@{triggerBody()?['caption']}<br>\n@{parameters('email-body-signature')}</p>",
+                      "Subject": "@triggerBody()?['subject']",
+                      "To": "@parameters('email-to')"
+                  },
+                  "host": {
+                      "connection": {
+                          "referenceName": "outlook"
+                      }
+                  },
+                  "method": "post",
+                  "path": "/v2/Mail"
+              },
+              "runAfter": {},
+              "type": "ApiConnection"
+          }
+      },
+      "contentVersion": "1.0.0.0",
+      "outputs": {},
+      "triggers": {
+          "manual": {
+              "inputs": {
+                  "schema": {
+                      "properties": {
+                          "caption": {
+                              "type": "string"
+                          },
+                          "subject": {
+                              "type": "string"
+                          }
+                      },
+                      "type": "object"
+                  }
+              },
+              "kind": "Http",
+              "type": "Request"
+          }
+      }
+  },
+  "kind": "Stateful"
+}
